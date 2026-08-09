@@ -1,1 +1,0 @@
-/usr/bin/c++ -O2 -g -DNDEBUG CMakeFiles/adb.dir/src/main.cpp.o -o adb  libadbcore.a /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so /usr/lib/x86_64-linux-gnu/libpcre2-8.so /usr/lib/x86_64-linux-gnu/libz.so 

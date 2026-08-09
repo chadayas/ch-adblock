@@ -58,8 +58,15 @@ public:
     // Precedence: $important blocking > exception > blocking > none.
     MatchResult match(const Request &req) const;
 
-    // Convenience: the stylesheet to inject for a document served by `host`.
+    // The stylesheet to inject for a document served by `host`.
     std::string cosmeticCss(std::string_view host) const { return cosmetic_.cssFor(host); }
+
+    // Preferred form: reduces the ~16 000 generic selectors down to the ones
+    // whose class/id token actually appears in this document. Pass the decoded
+    // HTML body.
+    std::string cosmeticCss(std::string_view host, std::string_view html) const {
+        return cosmetic_.cssFor(host, html);
+    }
 
     const EngineStats &stats() const { return stats_; }
 

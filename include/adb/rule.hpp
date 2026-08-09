@@ -93,6 +93,12 @@ struct Rule {
 
     // Does this rule's own pattern/anchors match `url`? Assumes all cheap
     // checks already passed. `url` is lowercased unless matchCase.
+    //
+    // The three-argument form takes the URL's host span, which `||` rules need.
+    // Locating it costs three passes over the URL, and match() tries thousands
+    // of candidates against one URL, so the caller computes it once and hands
+    // it down. The one-argument form recomputes it and exists for tests.
+    bool matchesPattern(std::string_view url, size_t hostStart, size_t hostEnd) const;
     bool matchesPattern(std::string_view url) const;
 };
 
@@ -106,6 +112,9 @@ struct Request {
     ContentType type   = CT_Other;
     Method method      = M_GET;
     bool thirdParty    = false;
+    // Byte offsets of the host inside `url`; filled by make().
+    uint32_t hostStart = 0;
+    uint32_t hostEnd   = 0;
 
     Request() = default;
     // Fills host / thirdParty from `u` and `srcHost`.

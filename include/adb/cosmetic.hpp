@@ -26,8 +26,23 @@ public:
     // Result is a complete CSS text, e.g. ".a,.b{display:none!important}".
     std::string cssFor(std::string_view host) const;
 
+    // Same, but keeps only the generic selectors whose class/id token actually
+    // occurs in `html`. Real lists carry ~16 000 generic selectors (250 KB of
+    // CSS); a given page needs a few dozen. Being a proxy we have the document
+    // in hand, so we can do this reduction that a browser extension cannot do
+    // before DOM-ready. Selectors that cannot be reduced to a single token
+    // (attribute-prefix matches and the like) are always emitted.
+    // Domain-specific selectors are always emitted -- there are few per host.
+    std::string cssFor(std::string_view host, std::string_view html) const;
+
+    // Call once after all rules are added; builds the token index used by the
+    // two-argument cssFor(). Idempotent.
+    void finalize();
+
     size_t genericCount() const { return generic_.size(); }
     size_t specificCount() const;
+    // Generic selectors that survive token reduction for `html`.
+    size_t genericAlwaysCount() const { return genericAlways_.size(); }
 
 private:
     struct DomainRule {
@@ -36,6 +51,11 @@ private:
     };
 
     std::vector<std::string> generic_;
+    // Lowercased class/id token -> generic selectors keyed on it.
+    std::unordered_map<std::string, std::vector<std::string>> genericByToken_;
+    // Generic selectors with no single reducible token; always emitted.
+    std::vector<std::string> genericAlways_;
+    bool finalized_ = false;
     // host domain -> selectors declared for it
     std::unordered_map<std::string, std::vector<DomainRule>> specific_;
     // host domain -> selectors disabled for it (#@#)

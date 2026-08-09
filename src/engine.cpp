@@ -4,6 +4,8 @@
 #include "adb/parser.hpp"
 #include "adb/url.hpp"
 
+#include <algorithm>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <string>
@@ -36,12 +38,50 @@ struct SvEq {
 };
 using RuleTable = std::unordered_map<std::string, std::vector<const Rule *>, SvHash, SvEq>;
 
-// The shortcut table is keyed on a fixed-length gram rather than the whole
-// literal. Same idea as AdGuard's `rules_by_shortcut` (notes/02 section 4),
-// simplified from Aho-Corasick to a gram hash: index a rule under the first
-// kGram bytes of its shortcut, then slide a kGram-byte window over the URL and
-// probe. A hit is only a candidate -- match() still verifies the FULL shortcut.
+// ---------------------------------------------------------------------------
+// Shortcut index.
+//
+// Same role as AdGuard's `rules_by_shortcut` (notes/02 section 4). We cannot
+// afford a real Aho-Corasick automaton over 280 000 literals, so we index on a
+// fixed-length gram and slide a window over the URL.
+//
+// The naive version -- key on the FIRST gram of the shortcut -- is what makes
+// this table useless: tens of thousands of rules start with "http", "/ads",
+// ".com", so a single probe drags in a bucket of thousands and every one of
+// them pays a full substring search. Measured 1.2 ms per request.
+//
+// Instead we index each rule under its RAREST gram. Correctness is unaffected:
+// if the shortcut occurs in the URL then *every* gram of the shortcut occurs in
+// the URL, so the chosen one does too. No false negatives, and buckets collapse
+// to a handful of rules.
+//
+// Two further wins fall out of it:
+//   * the gram is 4 bytes, so we pack it into a uint32_t and hash an integer
+//     instead of a string;
+//   * we remember where the gram sits inside the shortcut, so verification is
+//     one memcmp at a known offset rather than a scan of the whole URL.
+// ---------------------------------------------------------------------------
 constexpr size_t kGram = 4;
+
+struct Cand {
+    const Rule *rule;
+    uint32_t off; // offset of the indexed gram within rule->shortcut
+};
+using GramTable = std::unordered_map<uint32_t, std::vector<Cand>>;
+
+inline uint32_t packGram(const char *p) {
+    uint32_t g;
+    std::memcpy(&g, p, kGram);
+    return g;
+}
+
+// 3-byte key for the short-shortcut table; the top byte stays zero. It lives in
+// its own map, so it can never collide with a packed 4-gram.
+inline uint32_t packGram3(const char *p) {
+    uint32_t g = 0;
+    std::memcpy(&g, p, 3);
+    return g;
+}
 
 // Same `$` scan as the parser: last unescaped `$` outside a /regex/ body and
 // not part of `$$`.
@@ -107,8 +147,8 @@ int priority(const Rule *r) {
 
 struct Engine::Impl {
     std::deque<Rule> storage_; // stable addresses: match() hands out `const Rule*`
-    RuleTable byShortcut_;     // gram -> rules (shortcut.size() >= kGram)
-    std::vector<const Rule *> shortShortcuts_; // shortcut shorter than kGram
+    GramTable byShortcut_;  // rarest 4-gram -> candidates (shortcut >= 4)
+    GramTable byShortcut3_; // exact 3-byte shortcut -> candidates
     RuleTable byDomain_;                       // $domain value -> rules
     std::vector<const Rule *> leftovers_;      // unindexable, linear scan
     std::vector<Rule> badfilters_;
@@ -185,11 +225,20 @@ void Engine::finalize() {
     for (const Rule &bf : impl_->badfilters_) disabled.insert(stripBadfilter(bf.text));
 
     impl_->byShortcut_.clear();
-    impl_->shortShortcuts_.clear();
+    impl_->byShortcut3_.clear();
     impl_->byDomain_.clear();
     impl_->leftovers_.clear();
 
-    size_t survivors = 0, shortcutRules = 0;
+    // 2. Collect the survivors, splitting them across the three tables. Rules
+    //    that will live in the shortcut table are parked first: choosing their
+    //    gram needs the global frequency table, which only exists once every
+    //    survivor has been seen.
+    std::vector<const Rule *> shortcutRules;
+    shortcutRules.reserve(impl_->storage_.size());
+    std::unordered_map<uint32_t, uint32_t> gramFreq;
+    gramFreq.reserve(impl_->storage_.size());
+
+    size_t survivors = 0;
     for (const Rule &r : impl_->storage_) {
         if (!disabled.empty() && disabled.count(stripBadfilter(r.text))) {
             ADB_DBG("Rule is disabled by $badfilter: {}", r.text);
@@ -197,13 +246,17 @@ void Engine::finalize() {
         }
         ++survivors;
 
-        // 2. Index the survivor into exactly one of the three tables.
-        if (!r.shortcut.empty()) {
-            ++shortcutRules;
-            if (r.shortcut.size() >= kGram)
-                impl_->byShortcut_[r.shortcut.substr(0, kGram)].push_back(&r);
-            else
-                impl_->shortShortcuts_.push_back(&r);
+        if (r.shortcut.size() >= kGram) {
+            shortcutRules.push_back(&r);
+            const size_t n = r.shortcut.size() - kGram;
+            for (size_t i = 0; i <= n; ++i) ++gramFreq[packGram(r.shortcut.data() + i)];
+        } else if (r.shortcut.size() == 3) {
+            // The parser's floor is 3, so this is the only short case. Probing a
+            // 3-byte window costs one extra sweep of the URL and removes ~900
+            // rules from the every-request linear scan.
+            impl_->byShortcut3_[packGram3(r.shortcut.data())].push_back(Cand{&r, 0});
+        } else if (!r.shortcut.empty()) {
+            impl_->leftovers_.push_back(&r);
         } else if (!r.includeDomains.empty()) {
             for (const std::string &d : r.includeDomains) impl_->byDomain_[d].push_back(&r);
         } else {
@@ -211,18 +264,45 @@ void Engine::finalize() {
         }
     }
 
-    // 3. Stats.
+    // 3. Second pass: every rule goes under the rarest gram it contains.
+    for (const Rule *r : shortcutRules) {
+        const size_t n = r->shortcut.size() - kGram;
+        uint32_t bestGram = packGram(r->shortcut.data());
+        uint32_t bestOff  = 0;
+        uint32_t bestFreq = gramFreq[bestGram];
+        for (size_t i = 1; i <= n && bestFreq > 1; ++i) {
+            const uint32_t g = packGram(r->shortcut.data() + i);
+            const uint32_t f = gramFreq[g];
+            if (f < bestFreq) {
+                bestFreq = f;
+                bestGram = g;
+                bestOff  = static_cast<uint32_t>(i);
+            }
+        }
+        impl_->byShortcut_[bestGram].push_back(Cand{r, bestOff});
+    }
+
+    // 4. Stats.
     stats_.rulesTotal = survivors;
-    stats_.byShortcut = shortcutRules;
+    stats_.byShortcut = shortcutRules.size();
+    for (const auto &kv : impl_->byShortcut3_) stats_.byShortcut += kv.second.size();
     stats_.byDomain   = 0;
     for (const auto &kv : impl_->byDomain_) stats_.byDomain += kv.second.size();
     stats_.leftovers  = impl_->leftovers_.size();
     stats_.badfilters = impl_->badfilters_.size();
 
     impl_->finalized_ = true;
+    cosmetic_.finalize();
+
+    size_t worst = 0;
+    for (const auto &kv : impl_->byShortcut_) worst = std::max(worst, kv.second.size());
+    size_t worst3 = 0;
+    for (const auto &kv : impl_->byShortcut3_) worst3 = std::max(worst3, kv.second.size());
     ADB_INFO("finalized: {} rules ({} by shortcut, {} by domain, {} leftovers), {} cosmetic",
              stats_.rulesTotal, stats_.byShortcut, stats_.byDomain, stats_.leftovers,
              stats_.cosmetic);
+    ADB_DBG("shortcut index: {} 4-grams (worst {}), {} 3-grams (worst {})",
+            impl_->byShortcut_.size(), worst, impl_->byShortcut3_.size(), worst3);
 }
 
 // ===========================================================================
@@ -235,10 +315,11 @@ MatchResult Engine::match(const Request &req) const {
 
     // Checks run cheapest-first, in the exact order recovered from the binary
     // (notes/02 section 5). Trace phrasing mirrors the original log strings.
-    auto consider = [&](const Rule *r) {
+    auto consider = [&](const Rule *r, bool shortcutVerified) {
         ADB_TRACE("-> examining rule {}", r->text);
 
-        if (!r->shortcut.empty() && req.url.find(r->shortcut) == std::string::npos) {
+        if (!shortcutVerified && !r->shortcut.empty() &&
+            req.url.find(r->shortcut) == std::string::npos) {
             ADB_TRACE("...url doesn't contain shortcut ({})", r->shortcut);
             return;
         }
@@ -286,7 +367,7 @@ MatchResult Engine::match(const Request &req) const {
                 }
             }
         }
-        if (!r->matchesPattern(req.url)) {
+        if (!r->matchesPattern(req.url, req.hostStart, req.hostEnd)) {
             ADB_TRACE("...url was not matched against rule pattern");
             return;
         }
@@ -300,34 +381,39 @@ MatchResult Engine::match(const Request &req) const {
     };
 
     // --- shortcuts table --------------------------------------------------
-    // Slide a kGram window over the URL and probe. Buckets can be reached from
-    // several offsets; a tiny visited-set keeps the redundant work out (a miss
-    // there is harmless -- `consider` is idempotent).
+    // Slide a 4-byte window over the URL, probe the gram table, and verify the
+    // full shortcut at the offset the index already knows -- one memcmp, not a
+    // search. Reaching the same rule from two positions is possible but rare
+    // and harmless: `consider` is idempotent.
     const std::string_view u(req.url);
-    const void *visited[32];
-    size_t nvisited = 0;
-    size_t found    = 0;
+    size_t found = 0;
     if (u.size() >= kGram) {
-        for (size_t i = 0; i + kGram <= u.size(); ++i) {
-            const auto it = impl_->byShortcut_.find(u.substr(i, kGram));
+        const char *base = u.data();
+        for (size_t i = 0, n = u.size() - kGram; i <= n; ++i) {
+            const auto it = impl_->byShortcut_.find(packGram(base + i));
             if (it == impl_->byShortcut_.end()) continue;
-            const void *bucket = &it->second;
-            bool seen          = false;
-            for (size_t k = 0; k < nvisited; ++k)
-                if (visited[k] == bucket) {
-                    seen = true;
-                    break;
-                }
-            if (seen) continue;
-            if (nvisited < 32) visited[nvisited++] = bucket;
-            if (it->second.empty())
-                ADB_WARN("SHOULD NOT HAPPEN: empty value for rules_by_shortcut table!");
             found += it->second.size();
-            for (const Rule *r : it->second) consider(r);
+            for (const Cand &c : it->second) {
+                const std::string &sc = c.rule->shortcut;
+                if (i < c.off) continue;
+                const size_t start = i - c.off;
+                if (start + sc.size() > u.size()) continue;
+                if (std::memcmp(base + start, sc.data(), sc.size()) != 0) continue;
+                consider(c.rule, true);
+            }
         }
     }
-    for (const Rule *r : impl_->shortShortcuts_) consider(r);
-    found += impl_->shortShortcuts_.size();
+    // Second sweep for the 3-byte shortcuts. The window IS the whole shortcut,
+    // so a hit needs no further verification.
+    if (!impl_->byShortcut3_.empty() && u.size() >= 3) {
+        const char *base = u.data();
+        for (size_t i = 0, n = u.size() - 3; i <= n; ++i) {
+            const auto it = impl_->byShortcut3_.find(packGram3(base + i));
+            if (it == impl_->byShortcut3_.end()) continue;
+            found += it->second.size();
+            for (const Cand &c : it->second) consider(c.rule, true);
+        }
+    }
     ADB_TRACE("...shortcuts table found {} rules", found);
 
     // --- domains table ----------------------------------------------------
@@ -344,7 +430,7 @@ MatchResult Engine::match(const Request &req) const {
                              "table!",
                              req.url);
                 ADB_TRACE("...domains table found {} rules for {}", it->second.size(), h);
-                for (const Rule *r : it->second) consider(r);
+                for (const Rule *r : it->second) consider(r, false);
             }
             const size_t dot = h.find('.');
             if (dot == std::string_view::npos) break;
@@ -354,7 +440,7 @@ MatchResult Engine::match(const Request &req) const {
 
     // --- leftovers --------------------------------------------------------
     ADB_TRACE("...leftovers table found {} rules", impl_->leftovers_.size());
-    for (const Rule *r : impl_->leftovers_) consider(r);
+    for (const Rule *r : impl_->leftovers_) consider(r, false);
 
     return MatchResult{best, best != nullptr && !best->isException};
 }

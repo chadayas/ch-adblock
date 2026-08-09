@@ -269,6 +269,12 @@ Request Request::make(std::string_view u, std::string_view srcHost, ContentType 
     r.type       = t;
     r.method     = m;
     r.thirdParty = url::isThirdParty(r.host, r.sourceHost);
+
+    // Cache the host span so match() does not re-derive it for every candidate.
+    size_t hs = 0, he = 0;
+    hostSpan(r.url, hs, he);
+    r.hostStart = static_cast<uint32_t>(hs);
+    r.hostEnd   = static_cast<uint32_t>(he);
     return r;
 }
 
@@ -358,15 +364,16 @@ std::string extractShortcut(std::string_view pattern, bool isRegex, size_t minLe
 // Rule::matchesPattern()
 // ===========================================================================
 
-bool Rule::matchesPattern(std::string_view u) const {
+bool Rule::matchesPattern(std::string_view u, size_t hs, size_t he) const {
     if (isRegex) return re && re->search(u);
     if (pattern.empty()) return true;
 
     const std::string_view pat(pattern);
 
     if (domainAnchor) {
-        size_t hs = 0, he = 0;
-        hostSpan(u, hs, he);
+        // `||` anchors at the start of the host or at any label boundary
+        // inside it, so a.b.example.com is tried at a., b. and example.
+        if (he > u.size()) he = u.size();
         for (size_t i = hs; i < he; ++i) {
             if (i != hs && u[i - 1] != '.') continue;
             if (globAt(pat, u, i, anchorEnd)) return true;
@@ -375,6 +382,12 @@ bool Rule::matchesPattern(std::string_view u) const {
     }
     if (anchorStart) return globAt(pat, u, 0, anchorEnd);
     return globSearch(pat, u, anchorEnd);
+}
+
+bool Rule::matchesPattern(std::string_view u) const {
+    size_t hs = 0, he = 0;
+    if (domainAnchor) hostSpan(u, hs, he);
+    return matchesPattern(u, hs, he);
 }
 
 // ===========================================================================

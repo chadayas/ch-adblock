@@ -681,24 +681,31 @@ bool ProxyServer::Impl::serveOne(Conn &client, Reader &cr, bool https,
         const bool zlibbed =
             iequals(enc, "gzip") || iequals(enc, "x-gzip") || iequals(enc, "deflate");
         if (identity || zlibbed) {
-            const std::string css = engine.cosmeticCss(host);
-            if (!css.empty()) {
-                bool ok = true;
-                std::string plain;
-                if (identity) {
-                    plain = std::move(resp.body);
-                } else if (auto g = http::gunzip(resp.body)) {
-                    plain = std::move(*g);
-                } else {
-                    ok = false;
-                }
-                if (ok) {
+            // Decode first: the token-reduced cosmetic lookup needs the actual
+            // document. Feeding it the HTML turns ~250 KB of generic selectors
+            // into ~20 KB of selectors that can really match this page.
+            bool ok = true;
+            std::string plain;
+            if (identity) {
+                plain = std::move(resp.body);
+            } else if (auto g = http::gunzip(resp.body)) {
+                plain = std::move(*g);
+            } else {
+                ADB_DBG("could not decode Content-Encoding '{}', leaving body alone", enc);
+                ok = false;
+            }
+            if (ok) {
+                const std::string css = engine.cosmeticCss(host, plain);
+                if (!css.empty()) {
                     spliceCss(plain, css);
                     resp.body = std::move(plain);
                     resp.headers.remove("Content-Encoding");
                     stats.cssInjected.fetch_add(1, std::memory_order_relaxed);
                     ADB_DBG("injected {} bytes of CSS into {}", css.size(), host);
+                } else if (identity) {
+                    resp.body = std::move(plain); // nothing to hide; put it back
                 }
+                // zlibbed with no CSS: resp.body still holds the original bytes.
             }
         }
     }
