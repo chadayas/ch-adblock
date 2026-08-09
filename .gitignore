@@ -1,4 +1,13 @@
+# the binary under study
 adguard-cli
-filters/adguard-annoyances.txt filters/adguard-base.txt filters/adguard-tracking.txt filters/custom.txt
+
+# reverse-engineering scratch (regenerate with strings/objdump -- see notes/01)
+out/
+re/
+
+# downloaded filter lists (7 MB+ each; fetch from filters.adtidy.org)
+filters/adguard-*.txt
+
+# build artifacts
+build/
 filters
-out
