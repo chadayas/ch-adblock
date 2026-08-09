@@ -1,0 +1,6 @@
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/adbcore.dir
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/adb.dir
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/adb_tests.dir
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/test.dir
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/edit_cache.dir
+/home/chadaya/documents/projects/cpp_projects/adblock/build/CMakeFiles/rebuild_cache.dir

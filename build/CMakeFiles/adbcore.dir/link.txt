@@ -1,0 +1,2 @@
+/usr/bin/ar qc libadbcore.a CMakeFiles/adbcore.dir/src/url.cpp.o CMakeFiles/adbcore.dir/src/parser.cpp.o CMakeFiles/adbcore.dir/src/engine.cpp.o CMakeFiles/adbcore.dir/src/cosmetic.cpp.o CMakeFiles/adbcore.dir/src/ca.cpp.o CMakeFiles/adbcore.dir/src/http.cpp.o CMakeFiles/adbcore.dir/src/proxy.cpp.o
+/usr/bin/ranlib libadbcore.a
