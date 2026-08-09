@@ -1,0 +1,4 @@
+adguard-cli
+filters/adguard-annoyances.txt filters/adguard-base.txt filters/adguard-tracking.txt filters/custom.txt
+filters
+out
