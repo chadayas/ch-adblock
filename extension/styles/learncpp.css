@@ -1,0 +1,30 @@
+/* Derived from filters/custom.txt. Loaded only on learncpp.com by manifest.json. */
+span[id^="ezoic-pub-ad-placeholder-"],
+div[id^="ezoic-pub-ad-placeholder-"],
+span[data-ez-ph-id],
+[id^="ezoic_pub_ad"],
+.ezoic-ad,
+.ezoic-adpicker-ad,
+.ezoic_ad_unit,
+div.cf_monitor,
+div.code-block,
+div[class*="code-block-"],
+.ai-viewports,
+div[data-ai],
+.adsbygoogle,
+ins.adsbygoogle,
+iframe[src*="googlesyndication.com"],
+iframe[src*="doubleclick.net"],
+div[id^="google_ads_iframe"],
+div[id^="div-gpt-ad"],
+.taboola-container,
+.OUTBRAIN,
+[class^="adsbygoogle"] {
+  display: none !important;
+  visibility: hidden !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}

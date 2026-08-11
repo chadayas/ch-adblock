@@ -1,0 +1,512 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ezojs.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ezoic.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ezodn.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ezoiccdn.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ezoic.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||optable.co^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||doubleclick.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googlesyndication.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googleadservices.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adservice.google.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||google-analytics.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googletagmanager.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||googletagservices.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adnxs.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adsrvr.org^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||criteo.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||criteo.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||pubmatic.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||rubiconproject.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 20,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||openx.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||taboola.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 22,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||outbrain.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||scorecardresearch.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||quantserve.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||moatads.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 26,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||amazon-adsystem.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 27,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||media.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 28,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||sharethrough.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 29,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||33across.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||indexww.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||casalemedia.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||smartadserver.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||teads.tv^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adform.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 35,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||bidswitch.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 36,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||sonobi.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 37,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||districtm.io^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 38,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||yieldmo.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 39,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||adlightning.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||confiant-integrations.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||hotjar.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||fullstory.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||mouseflow.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||clarity.ms^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 45,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||segment.io^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 46,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||segment.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 47,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||mixpanel.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 48,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||amplitude.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 49,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||branch.io^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 50,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||newrelic.com^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||nr-data.net^",
+      "initiatorDomains": ["learncpp.com", "www.learncpp.com"],
+      "resourceTypes": ["script", "image", "stylesheet", "object", "xmlhttprequest", "sub_frame", "font", "media", "websocket", "ping", "other"]
+    }
+  }
+]
