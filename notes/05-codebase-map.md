@@ -229,7 +229,9 @@ When code changes, update these notes immediately:
 - proxy threading, tunnel, or body-buffer thresholds change -> this file;
 - CLI flags change -> `notes/04-results.md §7` and this file;
 - benchmark numbers change -> `notes/04-results.md §5`, with machine/compiler;
-- file sizes or module ownership change substantially -> this file §3.
+- file sizes or module ownership change substantially -> this file §3;
+- install paths, service lifecycle, proxy integration, or updater changes ->
+  `notes/06-personal-deployment-roadmap.md`;
 
 Current known documentation drift:
 
@@ -239,3 +241,5 @@ Current known documentation drift:
   engine, parser, and proxy changes;
 - `bench/bench.cpp` is standalone and not a CMake target, so benchmark numbers
   need manual build instructions before they are fully reproducible.
+
+Next: [Writeup 6 — personal desktop deployment roadmap](06-personal-deployment-roadmap.md).
