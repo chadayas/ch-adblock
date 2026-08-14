@@ -9,7 +9,7 @@ namespace adb {
 enum class LogLevel { Error = 0, Warn = 1, Info = 2, Debug = 3, Trace = 4 };
 
 // Process-wide verbosity. Set once at startup from the CLI.
-inline LogLevel g_log_level = LogLevel::Info;
+inline LogLevel g_log_level = LogLevel::Warn;
 
 namespace detail {
 inline std::mutex g_log_mu;

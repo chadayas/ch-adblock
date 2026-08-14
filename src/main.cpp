@@ -13,10 +13,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 using namespace adb;
@@ -33,6 +35,7 @@ extern "C" void onSignal(int) {
 void usage() {
     std::fputs(
         "usage: adb [options]\n"
+        "       adb setup|status|doctor|disable|uninstall\n"
         "  --listen ADDR[:PORT]   listen address        (default 127.0.0.1:8080)\n"
         "  --config FILE          configuration file    (default $XDG_CONFIG_HOME/adb/adb.conf)\n"
         "  --filters DIR          public filter lists   (default $XDG_DATA_HOME/adb/filters)\n"
@@ -42,6 +45,7 @@ void usage() {
         "  --no-stealth           disable stealth header rewriting\n"
         "  -v | -vv               debug / trace logging\n"
         "  --print-ca             print the CA certificate and exit\n"
+        "  --filter-stats         validate lists, print counts, and exit\n"
         "  --test URL             match one URL and exit\n"
         "     --source HOST         document host for third-party checks\n"
         "     --type TYPE           document|subdocument|script|stylesheet|image|\n"
@@ -75,9 +79,49 @@ void printStats(const EngineStats &s) {
              s.linesSkipped);
 }
 
+bool isDeploymentCommand(std::string_view command) {
+    return command == "setup" || command == "status" || command == "doctor" ||
+           command == "disable" || command == "uninstall";
+}
+
+int runDeploymentCommand(int argc, char **argv) {
+    std::error_code ec;
+    const fs::path executable = fs::canonical("/proc/self/exe", ec);
+    if (ec) {
+        std::fprintf(stderr, "adb: cannot resolve executable path: %s\n", ec.message().c_str());
+        return 1;
+    }
+    const fs::path prefix = executable.parent_path().parent_path();
+    const fs::path installedHelper = prefix / "libexec" / "adb" / "adb-deploy";
+    const fs::path sourceHelper = prefix / "scripts" / "adb-deploy";
+    const fs::path helper = fs::is_regular_file(installedHelper) ? installedHelper : sourceHelper;
+    if (!fs::is_regular_file(helper)) {
+        std::fprintf(stderr, "adb: cannot locate deployment helper under %s\n",
+                     prefix.string().c_str());
+        return 1;
+    }
+
+    const std::string executableText = executable.string();
+    const std::string shareText = (prefix / "share" / "adb").string();
+    ::setenv("ADB_EXECUTABLE", executableText.c_str(), 1);
+    ::setenv("ADB_SHARE_DIR", shareText.c_str(), 1);
+
+    std::string helperText = helper.string();
+    std::vector<char *> helperArgv;
+    helperArgv.reserve(static_cast<size_t>(argc) + 1);
+    helperArgv.push_back(helperText.data());
+    for (int i = 1; i < argc; ++i) helperArgv.push_back(argv[i]);
+    helperArgv.push_back(nullptr);
+    ::execv(helperText.c_str(), helperArgv.data());
+    std::fprintf(stderr, "adb: cannot execute %s: %s\n", helperText.c_str(), std::strerror(errno));
+    return 1;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+    if (argc >= 2 && isDeploymentCommand(argv[1])) return runDeploymentCommand(argc, argv);
+
     RuntimeConfig runtime = defaultRuntimeConfig();
     bool explicitConfig = false;
     for (int i = 1; i < argc; ++i) {
@@ -104,7 +148,7 @@ int main(int argc, char **argv) {
     ruleFiles.reserve(runtime.ruleFiles.size() + 1);
     for (const fs::path &path : runtime.ruleFiles) ruleFiles.push_back(path.string());
     std::string testUrl, testSource, testType;
-    bool printCa = false, doTest = false;
+    bool printCa = false, doTest = false, doFilterStats = false;
 
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -140,6 +184,8 @@ int main(int argc, char **argv) {
             g_log_level = LogLevel::Trace;
         } else if (a == "--print-ca") {
             printCa = true;
+        } else if (a == "--filter-stats") {
+            doFilterStats = true;
         } else if (a == "--test") {
             testUrl = value("--test");
             doTest  = true;
@@ -159,7 +205,7 @@ int main(int argc, char **argv) {
 
     // ---- CA ---------------------------------------------------------------
     CertAuthority ca;
-    const bool needCa = printCa || !doTest; // --test never touches TLS
+    const bool needCa = printCa || (!doTest && !doFilterStats);
     if (needCa && !ca.ensure(caDir)) {
         ADB_ERR("cannot set up the certificate authority in {}", caDir.string());
         return 1;
@@ -207,6 +253,12 @@ int main(int argc, char **argv) {
     engine.finalize();
     ADB_INFO("loaded {} rules from {} list(s)", loaded, listId);
     printStats(engine.stats());
+    if (doFilterStats) {
+        const EngineStats &stats = engine.stats();
+        std::printf("lists=%d accepted=%zu active=%zu cosmetic=%zu skipped=%zu\n", listId, loaded,
+                    stats.rulesTotal, stats.cosmetic, stats.linesSkipped);
+        return listId > 0 && stats.rulesTotal > 0 ? 0 : 1;
+    }
 
     // ---- one-shot match ---------------------------------------------------
     if (doTest) {

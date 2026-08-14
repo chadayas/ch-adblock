@@ -1,0 +1,20 @@
+[Unit]
+Description=adb personal desktop ad blocker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/adb
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ConfigurationDirectory=adb
+StateDirectory=adb
+ReadWritePaths=%E/adb %S/adb
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+# adb resolves omitted paths through the XDG base directories:
+#   filters      $XDG_DATA_HOME/adb/filters
+#   custom-rules $XDG_CONFIG_HOME/adb/custom.txt
+#   ca-dir       $XDG_CONFIG_HOME/adb
+#   state-dir    $XDG_STATE_HOME/adb
+
+listen = 127.0.0.1:8080
+css = true
+stealth = true
+
+# Relative paths are resolved from this file's directory.
+# rules = extra-rules.txt

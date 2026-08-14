@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly NICK="adb Local CA"
+readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+readonly CONFIG_DIR="$CONFIG_HOME/adb"
+readonly DATA_DIR="$DATA_HOME/adb"
+readonly STATE_DIR="$STATE_HOME/adb"
+readonly CONFIG_FILE="$CONFIG_DIR/adb.conf"
+readonly CUSTOM_FILE="$CONFIG_DIR/custom.txt"
+readonly FILTER_DIR="$DATA_DIR/filters"
+readonly SERVICE_DIR="$CONFIG_HOME/systemd/user"
+readonly SERVICE_FILE="$SERVICE_DIR/adb.service"
+readonly PROXY_STATE="$STATE_DIR/proxy-original"
+readonly CONSENT_FILE="$STATE_DIR/ca-consent.sha256"
+readonly ADB_BIN="${ADB_EXECUTABLE:-$(command -v adb || true)}"
+readonly SHARE_DIR="${ADB_SHARE_DIR:-}"
+
+LISTEN_HOST="127.0.0.1"
+LISTEN_PORT="8080"
+CA_PATH=""
+CA_DIR="$CONFIG_DIR"
+SETUP_RUNNING=0
+PROXY_TOUCHED=0
+TRUST_ADDED=0
+CONSENT_WRITTEN=0
+
+fail() {
+    printf 'adb: %s\n' "$*" >&2
+    if (( SETUP_RUNNING )); then
+        rollback_setup 1
+    fi
+    exit 1
+}
+
+need_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "required command '$1' is not installed"
+}
+
+trim() {
+    local value="$1"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+
+load_config_paths() {
+    local line key value
+    [[ -f "$CONFIG_FILE" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="$(trim "${line%%#*}")"
+        [[ -n "$line" && "$line" == *=* ]] || continue
+        key="$(trim "${line%%=*}")"
+        value="$(trim "${line#*=}")"
+        case "$key" in
+        listen)
+            if [[ "$value" =~ ^(127\.0\.0\.1|localhost):([1-9][0-9]{0,4})$ ]]; then
+                LISTEN_HOST="${BASH_REMATCH[1]}"
+                LISTEN_PORT="${BASH_REMATCH[2]}"
+            else
+                fail "setup requires a loopback IPv4 listen value with an explicit port"
+            fi
+            ;;
+        ca-dir)
+            if [[ "$value" == /* ]]; then CA_DIR="$value"; else CA_DIR="$CONFIG_DIR/$value"; fi
+            ;;
+        esac
+    done < "$CONFIG_FILE"
+    (( LISTEN_PORT <= 65535 )) || fail "configured listen port is out of range"
+}
+
+resolve_ca() {
+    local output
+    output="$("$ADB_BIN" --print-ca)" || fail "cannot create or load the adb CA"
+    CA_PATH="${output%%$'\n'*}"
+    CA_DIR="$(dirname "$CA_PATH")"
+    [[ -f "$CA_PATH" ]] || fail "adb reported a missing CA at $CA_PATH"
+}
+
+fingerprint() {
+    openssl x509 -in "$1" -noout -fingerprint -sha256 2>/dev/null | sed 's/^sha256 Fingerprint=//; s/^SHA256 Fingerprint=//; s/://g' | tr '[:lower:]' '[:upper:]'
+}
+
+listener_ready() {
+    timeout 1 bash -c "</dev/tcp/$LISTEN_HOST/$LISTEN_PORT" >/dev/null 2>&1
+}
+
+proxy_settings() {
+    cat <<'EOF'
+org.gnome.system.proxy|mode|mode
+org.gnome.system.proxy|use-same-proxy|use-same-proxy
+org.gnome.system.proxy.http|enabled|http-enabled
+org.gnome.system.proxy.http|host|http-host
+org.gnome.system.proxy.http|port|http-port
+org.gnome.system.proxy.https|host|https-host
+org.gnome.system.proxy.https|port|https-port
+EOF
+}
+
+capture_proxy() {
+    [[ -f "$PROXY_STATE/.captured" ]] && return 0
+    rm -rf "$PROXY_STATE.tmp"
+    install -d -m 700 "$PROXY_STATE.tmp"
+    local schema key name
+    while IFS='|' read -r schema key name; do
+        gsettings get "$schema" "$key" > "$PROXY_STATE.tmp/$name"
+    done < <(proxy_settings)
+    : > "$PROXY_STATE.tmp/.captured"
+    rm -rf "$PROXY_STATE"
+    mv "$PROXY_STATE.tmp" "$PROXY_STATE"
+}
+
+restore_proxy() {
+    [[ -f "$PROXY_STATE/.captured" ]] || return 0
+    local schema key name value
+    while IFS='|' read -r schema key name; do
+        value="$(cat "$PROXY_STATE/$name")"
+        gsettings set "$schema" "$key" "$value"
+    done < <(proxy_settings)
+    rm -rf "$PROXY_STATE"
+}
+
+configure_proxy() {
+    PROXY_TOUCHED=1
+    gsettings set org.gnome.system.proxy use-same-proxy true
+    gsettings set org.gnome.system.proxy.http enabled true
+    gsettings set org.gnome.system.proxy.http host "$LISTEN_HOST"
+    gsettings set org.gnome.system.proxy.http port "$LISTEN_PORT"
+    gsettings set org.gnome.system.proxy.https host "$LISTEN_HOST"
+    gsettings set org.gnome.system.proxy.https port "$LISTEN_PORT"
+    gsettings set org.gnome.system.proxy mode manual
+}
+
+nss_databases() {
+    printf 'sql:%s/.pki/nssdb\n' "$HOME"
+    local root profile
+    for root in "$HOME/.mozilla/firefox" \
+                "$HOME/snap/firefox/common/.mozilla/firefox" \
+                "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"; do
+        [[ -d "$root" ]] || continue
+        for profile in "$root"/*; do
+            [[ -f "$profile/cert9.db" ]] && printf 'sql:%s\n' "$profile"
+        done
+    done
+}
+
+ensure_chromium_db() {
+    install -d -m 700 "$HOME/.pki/nssdb"
+    [[ -f "$HOME/.pki/nssdb/cert9.db" ]] || certutil -N -d "sql:$HOME/.pki/nssdb" --empty-password >/dev/null
+}
+
+trust_ca() {
+    ensure_chromium_db
+    local db
+    while IFS= read -r db; do
+        certutil -D -n "$NICK" -d "$db" >/dev/null 2>&1 || true
+        certutil -A -n "$NICK" -t 'C,,' -i "$CA_PATH" -d "$db" >/dev/null
+        printf 'trusted: %s\n' "$db"
+    done < <(nss_databases)
+}
+
+untrust_ca() {
+    command -v certutil >/dev/null 2>&1 || return 0
+    local db
+    while IFS= read -r db; do
+        [[ -f "${db#sql:}/cert9.db" ]] || continue
+        certutil -D -n "$NICK" -d "$db" >/dev/null 2>&1 || true
+    done < <(nss_databases)
+}
+
+nss_trust_matches() {
+    local db="sql:$HOME/.pki/nssdb" tmp actual expected
+    [[ -f "$HOME/.pki/nssdb/cert9.db" ]] || return 1
+    tmp="$(mktemp)"
+    if ! certutil -L -n "$NICK" -a -d "$db" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp"
+        return 1
+    fi
+    actual="$(fingerprint "$tmp")"
+    expected="$(fingerprint "$CA_PATH")"
+    rm -f "$tmp"
+    [[ -n "$actual" && "$actual" == "$expected" ]]
+}
+
+install_service() {
+    local source=""
+    if [[ -n "$SHARE_DIR" && -f "$SHARE_DIR/systemd/user/adb.service" ]]; then
+        source="$SHARE_DIR/systemd/user/adb.service"
+    elif [[ -f "$(dirname "$ADB_BIN")/adb.service" ]]; then
+        source="$(dirname "$ADB_BIN")/adb.service"
+    fi
+    [[ -n "$source" ]] || fail "cannot locate the installed adb.service template"
+    install -d -m 700 "$SERVICE_DIR"
+    install -m 644 "$source" "$SERVICE_FILE"
+    systemctl --user daemon-reload
+}
+
+install_initial_filters() {
+    install -d -m 700 "$FILTER_DIR"
+    local existing=("$FILTER_DIR"/*.txt)
+    [[ -e "${existing[0]}" ]] && return 0
+    [[ -n "$SHARE_DIR" && -d "$SHARE_DIR/filters" ]] ||
+        fail "no installed filter lists found at $SHARE_DIR/filters"
+    local source
+    for source in "$SHARE_DIR"/filters/*.txt; do
+        [[ -f "$source" ]] || continue
+        install -m 644 "$source" "$FILTER_DIR/$(basename "$source")"
+    done
+    existing=("$FILTER_DIR"/*.txt)
+    [[ -e "${existing[0]}" ]] || fail "installed filter bundle is empty"
+}
+
+wait_for_listener() {
+    local attempt
+    for ((attempt = 0; attempt < 50; ++attempt)); do
+        listener_ready && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+rollback_setup() {
+    local rc="${1:-$?}"
+    trap - ERR INT TERM
+    SETUP_RUNNING=0
+    restore_proxy || true
+    systemctl --user disable --now adb.service >/dev/null 2>&1 || true
+    if (( TRUST_ADDED )); then
+        untrust_ca || true
+    fi
+    if (( CONSENT_WRITTEN )); then
+        rm -f "$CONSENT_FILE"
+    fi
+    printf 'adb: setup failed; restored desktop proxy state and stopped the service\n' >&2
+    exit "$rc"
+}
+
+setup_command() {
+    local assume_yes=0
+    while (($#)); do
+        case "$1" in
+        --yes) assume_yes=1 ;;
+        *) fail "unknown setup option '$1'" ;;
+        esac
+        shift
+    done
+
+    [[ -n "$ADB_BIN" && -x "$ADB_BIN" ]] || fail "cannot locate the adb executable"
+    need_command gsettings
+    need_command systemctl
+    need_command openssl
+    need_command timeout
+    install -d -m 700 "$CONFIG_DIR" "$DATA_DIR" "$STATE_DIR"
+    [[ -f "$CUSTOM_FILE" ]] || install -m 600 /dev/null "$CUSTOM_FILE"
+    load_config_paths
+    install_initial_filters
+    resolve_ca
+
+    local current_fingerprint trust_present=0 need_consent=0 have_certutil=0
+    current_fingerprint="$(fingerprint "$CA_PATH")"
+    [[ -n "$current_fingerprint" ]] || fail "cannot fingerprint $CA_PATH"
+    if command -v certutil >/dev/null 2>&1; then
+        have_certutil=1
+        nss_trust_matches && trust_present=1
+    fi
+    if [[ ! -f "$CONSENT_FILE" || "$(cat "$CONSENT_FILE")" != "$current_fingerprint" ]]; then
+        need_consent=1
+        printf '%s\n' \
+            "Trusting $CA_PATH lets its private key mint certificates for any website." \
+            "The key remains on this machine under $CA_DIR."
+        if (( ! assume_yes )); then
+            [[ -t 0 ]] || fail "CA consent required; rerun interactively or pass --yes after reviewing the warning"
+            read -r -p "Trust this adb CA in local browser profiles? [y/N] " answer
+            [[ "$answer" == y || "$answer" == Y || "$answer" == yes || "$answer" == YES ]] ||
+                fail "setup cancelled"
+        fi
+    fi
+
+    if (( ! have_certutil )); then
+        printf '%s\n' \
+            "certutil is unavailable; import $CA_PATH manually:" \
+            "  Chrome: chrome://certificate-manager > Local certificates > Installed by you" \
+            "  Firefox: Settings > Privacy & Security > Certificates > Authorities > Import"
+        if (( need_consent )); then
+            [[ -t 0 ]] || fail "manual CA import must be confirmed interactively"
+            read -r -p "Press Enter after importing the CA in each browser profile. " _
+        fi
+        trust_present=1
+    fi
+    SETUP_RUNNING=1
+    trap rollback_setup ERR INT TERM
+    if (( ! trust_present )); then
+        trust_ca
+        TRUST_ADDED=1
+    fi
+    if (( need_consent )); then
+        printf '%s\n' "$current_fingerprint" > "$CONSENT_FILE"
+        chmod 600 "$CONSENT_FILE"
+        CONSENT_WRITTEN=1
+    fi
+
+    install_service
+    capture_proxy
+    systemctl --user enable --now adb.service
+    wait_for_listener || fail "adb.service did not begin listening on $LISTEN_HOST:$LISTEN_PORT"
+    configure_proxy
+    SETUP_RUNNING=0
+    trap - ERR INT TERM
+    printf 'adb setup complete: desktop proxy -> %s:%s\n' "$LISTEN_HOST" "$LISTEN_PORT"
+}
+
+service_state() {
+    if systemctl --user is-active --quiet adb.service; then printf 'active'; else printf 'inactive'; fi
+}
+
+proxy_points_to_adb() {
+    [[ "$(gsettings get org.gnome.system.proxy mode)" == "'manual'" ]] &&
+        [[ "$(gsettings get org.gnome.system.proxy.http host)" == "'$LISTEN_HOST'" ]] &&
+        [[ "$(gsettings get org.gnome.system.proxy.http port)" == "$LISTEN_PORT" ]]
+}
+
+filter_stats() {
+    local stats
+    if stats="$("$ADB_BIN" --filter-stats 2>/dev/null)"; then
+        printf '%s' "$stats"
+    else
+        printf 'unavailable'
+    fi
+}
+
+status_command() {
+    need_command gsettings
+    need_command systemctl
+    load_config_paths
+    printf 'service: %s\n' "$(service_state)"
+    if listener_ready; then printf 'listener: ready at %s:%s\n' "$LISTEN_HOST" "$LISTEN_PORT"
+    else printf 'listener: unavailable at %s:%s\n' "$LISTEN_HOST" "$LISTEN_PORT"; fi
+    printf 'filters: %s\n' "$(filter_stats)"
+    if proxy_points_to_adb; then printf 'desktop-proxy: adb\n'; else printf 'desktop-proxy: other\n'; fi
+    CA_PATH="$CA_DIR/ca.crt"
+    if [[ -f "$CA_PATH" ]]; then
+        printf 'ca-sha256: %s\n' "$(fingerprint "$CA_PATH")"
+    else
+        printf 'ca-sha256: missing\n'
+    fi
+    if [[ -f "$STATE_DIR/update.state" ]]; then
+        printf 'last-update: %s\n' "$(cat "$STATE_DIR/update.state")"
+    else
+        printf 'last-update: bundled filters; automatic updates not configured\n'
+    fi
+}
+
+check() {
+    local message="$1"
+    shift
+    if "$@"; then printf 'PASS %s\n' "$message"; else printf 'FAIL %s\n' "$message"; DOCTOR_FAILURES=$((DOCTOR_FAILURES + 1)); fi
+}
+
+ca_files_valid() {
+    [[ -f "$CA_PATH" && -f "$CA_DIR/ca.key" ]] &&
+        openssl x509 -in "$CA_PATH" -noout >/dev/null 2>&1 &&
+        openssl pkey -in "$CA_DIR/ca.key" -noout >/dev/null 2>&1
+}
+
+ca_key_matches() {
+    local cert_key private_key
+    cert_key="$(openssl x509 -in "$CA_PATH" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform DER 2>/dev/null | openssl dgst -sha256 2>/dev/null)" || return 1
+    private_key="$(openssl pkey -in "$CA_DIR/ca.key" -pubout -outform DER 2>/dev/null | openssl dgst -sha256 2>/dev/null)" || return 1
+    [[ -n "$cert_key" && "$cert_key" == "$private_key" ]]
+}
+
+safe_key_permissions() {
+    [[ "$(stat -c '%a' "$CA_DIR/ca.key" 2>/dev/null)" == 600 ]]
+}
+
+filters_valid() {
+    [[ "$(filter_stats)" != unavailable ]]
+}
+
+doctor_command() {
+    local have_certutil=0
+    command -v certutil >/dev/null 2>&1 && have_certutil=1
+    need_command gsettings
+    need_command systemctl
+    need_command openssl
+    load_config_paths
+    CA_PATH="$CA_DIR/ca.crt"
+    DOCTOR_FAILURES=0
+    check "adb.service is active" systemctl --user is-active --quiet adb.service
+    check "listener accepts connections at $LISTEN_HOST:$LISTEN_PORT" listener_ready
+    check "CA certificate and private key parse" ca_files_valid
+    check "CA certificate matches private key" ca_key_matches
+    check "CA private key permissions are 0600" safe_key_permissions
+    if (( have_certutil )); then
+        check "Chromium NSS trusts the expected CA fingerprint" nss_trust_matches
+    else
+        printf 'FAIL certutil is unavailable; browser CA trust cannot be verified\n'
+        DOCTOR_FAILURES=$((DOCTOR_FAILURES + 1))
+    fi
+    check "desktop proxy points to the active listener" proxy_points_to_adb
+    check "configured filters load successfully ($(filter_stats))" filters_valid
+    if [[ -f "$STATE_DIR/update.state" ]]; then
+        printf 'PASS public lists updated: %s\n' "$(cat "$STATE_DIR/update.state")"
+    else
+        printf 'INFO public lists are the bundled initial version\n'
+    fi
+    (( DOCTOR_FAILURES == 0 )) || fail "$DOCTOR_FAILURES deployment check(s) failed"
+}
+
+disable_command() {
+    need_command gsettings
+    need_command systemctl
+    restore_proxy
+    systemctl --user disable --now adb.service >/dev/null 2>&1 || true
+    printf 'adb disabled; previous desktop proxy settings restored\n'
+}
+
+uninstall_command() {
+    local purge=0 purge_custom=0
+    while (($#)); do
+        case "$1" in
+        --purge) purge=1 ;;
+        --purge-custom) purge=1; purge_custom=1 ;;
+        *) fail "unknown uninstall option '$1'" ;;
+        esac
+        shift
+    done
+    need_command gsettings
+    need_command systemctl
+    load_config_paths
+    CA_PATH="$CA_DIR/ca.crt"
+    disable_command
+    untrust_ca
+    rm -f "$SERVICE_FILE"
+    systemctl --user daemon-reload
+    rm -f "$CONSENT_FILE" "$STATE_DIR/update.state"
+    if (( purge )); then
+        rm -f "$CA_DIR/ca.crt" "$CA_DIR/ca.key"
+        rm -rf "$FILTER_DIR"
+    fi
+    (( purge_custom )) && rm -f "$CUSTOM_FILE"
+    if (( purge_custom )); then
+        printf 'adb deployment and user-authored rules removed; executable preserved\n'
+    else
+        printf 'adb deployment removed; executable and user-authored rules preserved\n'
+    fi
+}
+
+usage() {
+    cat >&2 <<'EOF'
+usage: adb setup [--yes]
+       adb status
+       adb doctor
+       adb disable
+       adb uninstall [--purge] [--purge-custom]
+EOF
+}
+
+command="${1:-}"
+[[ $# -gt 0 ]] && shift
+case "$command" in
+setup) setup_command "$@" ;;
+status) status_command "$@" ;;
+doctor) doctor_command "$@" ;;
+disable) disable_command "$@" ;;
+uninstall) uninstall_command "$@" ;;
+*) usage; exit 2 ;;
+esac
