@@ -567,7 +567,7 @@ bool ProxyServer::Impl::serveOne(Conn &client, Reader &cr, bool https,
 
     if (mr.blocked && mr.rule) {
         stats.blocked.fetch_add(1, std::memory_order_relaxed);
-        ADB_INFO("BLOCK {} [{}] by {}", absUrl, ctypeName(ctype), mr.rule->text);
+        ADB_DBG("BLOCK {} [{}] by {}", absUrl, ctypeName(ctype), mr.rule->text);
         http::Response br = http::blockedResponse(accept);
         br.headers.set("Connection", clientClose ? "close" : "keep-alive");
         if (!client.writeAll(br.serialize())) return false;

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include "adb/ca.hpp"
+#include "adb/config.hpp"
 #include "adb/engine.hpp"
 #include "adb/http.hpp"
 #include "adb/log.hpp"
@@ -33,9 +34,10 @@ void usage() {
     std::fputs(
         "usage: adb [options]\n"
         "  --listen ADDR[:PORT]   listen address        (default 127.0.0.1:8080)\n"
-        "  --filters DIR          load every *.txt here (default ./filters)\n"
+        "  --config FILE          configuration file    (default $XDG_CONFIG_HOME/adb/adb.conf)\n"
+        "  --filters DIR          public filter lists   (default $XDG_DATA_HOME/adb/filters)\n"
         "  --rules FILE           extra filter list, repeatable\n"
-        "  --ca-dir DIR           CA storage            (default ~/.config/adb)\n"
+        "  --ca-dir DIR           CA storage            (default $XDG_CONFIG_HOME/adb)\n"
         "  --no-css               disable cosmetic CSS injection\n"
         "  --no-stealth           disable stealth header rewriting\n"
         "  -v | -vv               debug / trace logging\n"
@@ -47,11 +49,6 @@ void usage() {
         stderr);
 }
 
-fs::path defaultCaDir() {
-    const char *home = std::getenv("HOME");
-    if (home && *home) return fs::path(home) / ".config" / "adb";
-    return fs::path(".adb");
-}
 
 bool parseType(std::string_view s, ContentType &out) {
     struct { const char *name; ContentType t; } kMap[] = {
@@ -72,20 +69,40 @@ bool parseType(std::string_view s, ContentType &out) {
 }
 
 void printStats(const EngineStats &s) {
-    std::fprintf(stderr,
-                 "rules: %zu total, %zu by shortcut, %zu by domain, %zu leftovers, "
-                 "%zu badfilter, %zu cosmetic, %zu lines skipped\n",
-                 s.rulesTotal, s.byShortcut, s.byDomain, s.leftovers, s.badfilters, s.cosmetic,
-                 s.linesSkipped);
+    ADB_INFO("rules: {} total, {} by shortcut, {} by domain, {} leftovers, {} badfilter, "
+             "{} cosmetic, {} lines skipped",
+             s.rulesTotal, s.byShortcut, s.byDomain, s.leftovers, s.badfilters, s.cosmetic,
+             s.linesSkipped);
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
-    ProxyConfig cfg;
-    fs::path filtersDir = "filters";
-    fs::path caDir      = defaultCaDir();
+    RuntimeConfig runtime = defaultRuntimeConfig();
+    bool explicitConfig = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string_view(argv[i]) != "--config") continue;
+        if (i + 1 >= argc) {
+            std::fputs("adb: --config requires an argument\n", stderr);
+            return 2;
+        }
+        runtime.configFile = argv[++i];
+        explicitConfig = true;
+    }
+    if (explicitConfig || fs::is_regular_file(runtime.configFile)) {
+        std::string error;
+        if (!loadRuntimeConfig(runtime.configFile, runtime, error)) {
+            std::fprintf(stderr, "adb: %s\n", error.c_str());
+            return 2;
+        }
+    }
+
+    ProxyConfig cfg = runtime.proxy;
+    fs::path filtersDir = runtime.filtersDir;
+    fs::path caDir = runtime.caDir;
     std::vector<std::string> ruleFiles;
+    ruleFiles.reserve(runtime.ruleFiles.size() + 1);
+    for (const fs::path &path : runtime.ruleFiles) ruleFiles.push_back(path.string());
     std::string testUrl, testSource, testType;
     bool printCa = false, doTest = false;
 
@@ -105,6 +122,8 @@ int main(int argc, char **argv) {
             http::splitHostPort(value("--listen"), host, port);
             if (!host.empty()) cfg.listenAddr = host;
             if (port) cfg.listenPort = port;
+        } else if (a == "--config") {
+            value("--config"); // already loaded before applying CLI overrides
         } else if (a == "--filters") {
             filtersDir = value("--filters");
         } else if (a == "--rules") {
@@ -172,8 +191,13 @@ int main(int argc, char **argv) {
             ADB_INFO("{}: {} rules", p.filename().string(), n);
             loaded += n;
         }
-    } else if (ruleFiles.empty()) {
-        ADB_WARN("no filter directory at {} and no --rules given", filtersDir.string());
+    } else if (ruleFiles.empty() && !fs::is_regular_file(runtime.customRules)) {
+        ADB_WARN("no filter directory or rule files found at configured XDG paths");
+    }
+    if (fs::is_regular_file(runtime.customRules)) {
+        const size_t n = engine.loadFile(runtime.customRules, listId++);
+        ADB_INFO("{}: {} rules", runtime.customRules.filename().string(), n);
+        loaded += n;
     }
     for (const std::string &f : ruleFiles) {
         const size_t n = engine.loadFile(f, listId++);
@@ -218,16 +242,13 @@ int main(int argc, char **argv) {
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
 
-    std::fprintf(stderr, "adb: proxy on %s:%u, CA %s\n", cfg.listenAddr.c_str(),
-                 unsigned(cfg.listenPort), ca.caPath().string().c_str());
+    ADB_INFO("proxy on {}:{}, CA {}", cfg.listenAddr, cfg.listenPort, ca.caPath().string());
     const bool ok = server.run();
     g_server.store(nullptr);
 
     const ProxyStats &st = server.stats();
-    std::fprintf(stderr, "adb: %llu connections, %llu requests, %llu blocked, %llu injected, "
-                         "%llu tunnelled\n",
-                 (unsigned long long)st.connections.load(), (unsigned long long)st.requests.load(),
-                 (unsigned long long)st.blocked.load(), (unsigned long long)st.cssInjected.load(),
-                 (unsigned long long)st.tunneled.load());
+    ADB_INFO("{} connections, {} requests, {} blocked, {} injected, {} tunnelled",
+             st.connections.load(), st.requests.load(), st.blocked.load(), st.cssInjected.load(),
+             st.tunneled.load());
     return ok ? 0 : 1;
 }
