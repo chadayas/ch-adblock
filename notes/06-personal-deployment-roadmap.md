@@ -76,8 +76,8 @@ Chrome's trust store and retaining normal certificate validation.
 - no runtime filter reload;
 - no transparent interception mode.
 
-The current application is a deployment-capable explicit proxy. Live desktop
-acceptance still requires running `adb setup` with explicit CA consent.
+The current application is now installed as an active per-user desktop proxy;
+automatic updates and runtime reload remain future phases.
 
 ---
 
@@ -248,7 +248,7 @@ from `/tmp` with an external `adb.conf`, loaded the configured lists, and
 returned `204 No Content` with `X-Adb-Blocked: 1` for a proxied DoubleClick
 request. The unit suite passes 103 tests.
 
-### Phase B — Setup, diagnostics, and teardown (implemented)
+### Phase B — Setup, diagnostics, and teardown (implemented and deployed)
 
 Add user-facing lifecycle commands or an equivalent companion tool:
 
@@ -287,9 +287,13 @@ Implemented proof: the installed `adb` dispatches all five lifecycle commands.
 An isolated GNOME/NSS/systemd integration scenario covers setup twice, status,
 doctor, disable twice, setup again, uninstall twice, optional purge behavior,
 exact proxy restoration, CA trust removal, and rollback when service startup
-fails. The installed systemd user unit also passes `systemd-analyze --user
-verify`. Live Chrome acceptance remains pending explicit CA consent on the
-desktop account.
+fails. The installed systemd user unit passes `systemd-analyze --user verify`.
+Live setup then installed and enabled the user service, preserved and replaced
+the GNOME proxy settings in lifecycle order, and passed every `adb doctor`
+check. Normal Chromium loaded the LearnCpp article without a certificate
+warning; DoubleClick, Optable, Ezoic, and Google Analytics resource entries each
+reported zero transferred and decoded bytes while article text, images, and code
+highlighting remained intact.
 
 ### Phase C — Automatic filter updates
 
